@@ -10,7 +10,10 @@ import {
 	initDeployHelpersContext,
 	previewBuildOutput,
 } from "@cloudflare/deploy-helpers";
-import { getCloudflareApiBaseUrl } from "@cloudflare/workers-utils";
+import {
+	getCloudflareApiBaseUrl,
+	getCloudflareComplianceRegion,
+} from "@cloudflare/workers-utils";
 import { getAccountId, getAuthToken } from "../../lib/auth.js";
 import { BuildOutputConfigError } from "../../lib/build-output-error.js";
 import {
@@ -96,9 +99,7 @@ async function deployPreviewBuildOutput(
 ): Promise<PreviewResult> {
 	const output = await readBuildOutput(process.cwd());
 	assertPreviewBuildOutputRootConfig(output.rootConfig);
-	validateBuildOutputMode(argv.mode, output.rootConfig.buildContext.mode, {
-		requireRequestedMode: argv.prebuilt,
-	});
+	validateBuildOutputMode(argv.mode, output.rootConfig.buildContext.mode);
 	const worker = selectBuildOutputWorker(output.workers, argv.worker);
 	const { wranglerConfig, builtConfig } = parseWorkerConfig(
 		worker,
@@ -106,7 +107,13 @@ async function deployPreviewBuildOutput(
 	);
 
 	const authToken = await getAuthToken();
-	const accountId = await getAccountId({ isPreview: true });
+	const accountId =
+		output.rootConfig.accountId ??
+		(await getAccountId({
+			isPreview: true,
+			skipProjectSettings: true,
+			complianceRegion: getCloudflareComplianceRegion(wranglerConfig),
+		}));
 	const deployContext = createDeployContext(authToken);
 	// TODO(cloudflare/cf#330): Let previewBuildOutput() return without printing.
 	// Until then, hide its summary so this command prints one clean JSON result.

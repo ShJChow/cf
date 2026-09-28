@@ -4,6 +4,7 @@ import {
 	initDeployHelpersContext,
 	triggersDeploy,
 } from "@cloudflare/deploy-helpers";
+import { getCloudflareComplianceRegion } from "@cloudflare/workers-utils";
 import { getAccountId, getAuthToken } from "../../../lib/auth.js";
 import {
 	buildOutputWorkerOption,
@@ -68,15 +69,19 @@ async function deployTriggers(argv: TriggersDeployArgs): Promise<void> {
 			`The Build Output was created for a Preview, but this command deploys production triggers. To use the existing Build Output and deploy the Preview, run "${previewCommand}". To deploy production triggers, rebuild without Preview settings before deploying.`
 		);
 	}
-	validateBuildOutputMode(argv.mode, rootConfig.buildContext.mode, {
-		requireRequestedMode: argv.prebuilt,
-	});
+	validateBuildOutputMode(argv.mode, rootConfig.buildContext.mode);
 	const worker = selectBuildOutputWorker(workers, argv.worker);
 	const { wranglerConfig } = parseWorkerConfig(worker, rootConfig);
 
 	// Dry runs make no API requests, so they never need credentials.
 	const authToken = argv["dry-run"] ? "" : await getAuthToken();
-	const accountId = argv["dry-run"] ? undefined : await getAccountId();
+	const accountId = argv["dry-run"]
+		? undefined
+		: (rootConfig.accountId ??
+			(await getAccountId({
+				skipProjectSettings: true,
+				complianceRegion: getCloudflareComplianceRegion(wranglerConfig),
+			})));
 	initDeployHelpersContext(createDeployContext(authToken));
 
 	clack.log.message(theme.bold("Deploy triggers"), {

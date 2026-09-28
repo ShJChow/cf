@@ -52,7 +52,7 @@ vi.mock("../../lib/build-output.js", async (importOriginal) => {
 		buildOutputWorkerOption: actual.buildOutputWorkerOption,
 		parseWorkerConfig: mocks.parseWorkerConfig,
 		selectBuildOutputWorker: actual.selectBuildOutputWorker,
-		validateBuildOutputMode: vi.fn(),
+		validateBuildOutputMode: actual.validateBuildOutputMode,
 	};
 });
 
@@ -138,7 +138,11 @@ describe("cf previews deploy", () => {
 		expect(mocks.assertPreviewBuildOutputRootConfig).toHaveBeenCalledWith(
 			rootConfig
 		);
-		expect(mocks.getAccountId).toHaveBeenCalledWith({ isPreview: true });
+		expect(mocks.getAccountId).toHaveBeenCalledWith({
+			isPreview: true,
+			skipProjectSettings: true,
+			complianceRegion: "public",
+		});
 		expect(mocks.createDeployContext).toHaveBeenCalledWith("token");
 		expect(mocks.initDeployHelpersContext).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -161,8 +165,11 @@ describe("cf previews deploy", () => {
 		);
 	});
 
-	it("uploads existing Preview Build Output with --prebuilt", async () => {
-		const rootConfig = { buildContext: { isPreview: true } };
+	it("uploads prebuilt Preview output with a recorded mode without --mode", async () => {
+		const rootConfig = {
+			accountId: "built-preview-account",
+			buildContext: { isPreview: true, mode: "staging" },
+		};
 		const worker = {
 			config: { type: "worker", name: "preview-worker" },
 			bundleDir: "/project/bundle",
@@ -187,13 +194,56 @@ describe("cf previews deploy", () => {
 		).resolves.toBe(previewResult);
 
 		expect(mocks.runBuild).not.toHaveBeenCalled();
+		expect(mocks.getAccountId).not.toHaveBeenCalled();
 		expect(mocks.previewBuildOutput).toHaveBeenCalledWith(
-			"account-id",
+			"built-preview-account",
 			{ name: "feature", json: true },
 			expect.objectContaining({
 				workerConfig: worker.config,
 				rootConfig,
 			}),
+			expect.any(Object)
+		);
+	});
+
+	it("uses the built region to select an account when output omits its ID", async () => {
+		const worker = {
+			config: {
+				type: "worker",
+				name: "preview-worker",
+				compliance_region: "fedramp_high",
+			},
+			bundleDir: "/project/bundle",
+		};
+		mocks.readBuildOutput.mockResolvedValue({
+			rootConfig: {
+				complianceRegion: "fedramp-high",
+				buildContext: { isPreview: true, mode: "staging" },
+			},
+			workers: { default: worker },
+		});
+		mocks.assembleBuildResult.mockReturnValue({ content: "worker code" });
+		mocks.getAuthToken.mockResolvedValue("token");
+		mocks.getAccountId.mockResolvedValue("selected-account");
+		mocks.createDeployContext.mockReturnValue({
+			logger: { log: vi.fn(), info: vi.fn() },
+		});
+		mocks.previewBuildOutput.mockResolvedValue(previewResult);
+
+		await runPreviewDeploy({
+			"preview-name": "feature",
+			prebuilt: true,
+		} as Parameters<typeof runPreviewDeploy>[0]);
+
+		expect(mocks.getAccountId).toHaveBeenCalledWith({
+			isPreview: true,
+			skipProjectSettings: true,
+			complianceRegion: "fedramp_high",
+		});
+		expect(mocks.previewBuildOutput).toHaveBeenCalledWith(
+			"selected-account",
+			expect.any(Object),
+			expect.any(Object),
 			expect.any(Object)
 		);
 	});

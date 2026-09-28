@@ -139,7 +139,7 @@ describe("cf workers versions create", () => {
 		expect(upload.metadata).toBeUndefined();
 	});
 
-	it("requires the recorded mode when uploading prebuilt output", async () => {
+	it("uploads prebuilt output with a recorded mode without --mode", async () => {
 		const upload = mockWorkerUpload();
 		await seed({
 			".cloudflare/output/v0/config.json": buildOutputRootConfig({
@@ -151,14 +151,16 @@ describe("cf workers versions create", () => {
 				"export default { fetch() { return new Response('ok'); } }",
 		});
 
-		await expect(
-			runCf(["workers", "versions", "create", "--prebuilt"])
-		).rejects.toThrow(
-			'The Build Output was created with mode "staging", but this command did not specify a mode. Rerun with "--mode staging".'
-		);
+		const { exitCode } = await runCf([
+			"workers",
+			"versions",
+			"create",
+			"--prebuilt",
+		]);
 
+		expect(exitCode).toBe(0);
 		expect(buildDelegateWasCalled()).toBe(false);
-		expect(upload.metadata).toBeUndefined();
+		expect(upload.metadata?.main_module).toBe("index.js");
 	});
 
 	it("points Preview Build Output to a mode-aware Preview deploy", async () => {
@@ -209,9 +211,13 @@ describe("cf workers versions create", () => {
 	});
 
 	it("skips build when --prebuilt is passed", async () => {
+		const requests = recordRequests();
 		mockWorkerUpload();
 		await seed({
-			".cloudflare/output/v0/config.json": buildOutputRootConfig(),
+			".cloudflare/output/v0/config.json": buildOutputRootConfig({
+				accountId: "built-account",
+				complianceRegion: "fedramp-high",
+			}),
 			".cloudflare/output/v0/workers/default/worker.config.json":
 				workerConfig(),
 			".cloudflare/output/v0/workers/default/bundle/index.js":
@@ -227,6 +233,9 @@ describe("cf workers versions create", () => {
 
 		expect(exitCode).toBe(0);
 		expect(buildDelegateWasCalled()).toBe(false);
+		expect(
+			requests.some((request) => request.includes("/accounts/built-account/"))
+		).toBe(true);
 	});
 
 	it("makes no API requests and needs no credentials during a dry run", async () => {

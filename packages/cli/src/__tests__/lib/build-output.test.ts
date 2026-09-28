@@ -172,18 +172,6 @@ describe("build output", () => {
 			);
 		});
 
-		it("requires a requested mode when configured for prebuilt deployment", () => {
-			expect(() =>
-				validateBuildOutputMode(undefined, "staging", {
-					requireRequestedMode: true,
-				})
-			).toThrowError(
-				new BuildOutputConfigError(
-					'The Build Output was created with mode "staging", but this command did not specify a mode. Rerun with "--mode staging".'
-				)
-			);
-		});
-
 		it("rejects Build Output without a recorded mode", () => {
 			expect(() => validateBuildOutputMode("staging", undefined)).toThrowError(
 				new BuildOutputConfigError(

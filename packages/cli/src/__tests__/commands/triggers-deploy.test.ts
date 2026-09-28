@@ -115,18 +115,24 @@ describe("cf workers triggers deploy", () => {
 
 	it("skips the build and deploys existing triggers with --prebuilt", async () => {
 		let schedulesBody: unknown;
+		let schedulesAccount: unknown;
 		msw.use(
 			http.put(
 				"*/accounts/:accountId/workers/scripts/:scriptName/schedules",
-				async ({ request }) => {
+				async ({ request, params }) => {
 					schedulesBody = await request.json();
+					schedulesAccount = params.accountId;
 					return HttpResponse.json(createFetchResult({ schedules: [] }));
 				},
 				{ once: true }
 			)
 		);
 		await seed({
-			".cloudflare/output/v0/config.json": buildOutputRootConfig(),
+			"cloudflare.config.ts": `export default () => { throw new Error("Project config should not be reevaluated"); };`,
+			".cloudflare/output/v0/config.json": buildOutputRootConfig({
+				accountId: "built-account",
+				complianceRegion: "fedramp-high",
+			}),
 			".cloudflare/output/v0/workers/default/worker.config.json": workerConfig({
 				triggers: [{ type: "scheduled", schedule: "*/5 * * * *" }],
 			}),
@@ -142,21 +148,27 @@ describe("cf workers triggers deploy", () => {
 		expect(exitCode).toBe(0);
 		expect(buildDelegateWasCalled()).toBe(false);
 		expect(schedulesBody).toEqual([{ cron: "*/5 * * * *" }]);
+		expect(schedulesAccount).toBe("built-account");
 	});
 
-	it("requires the recorded mode when deploying prebuilt triggers", async () => {
+	it("selects an account without rereading config when output omits it", async () => {
 		let schedulesCalled = false;
+		let schedulesAccount: unknown;
 		msw.use(
 			http.put(
 				"*/accounts/:accountId/workers/scripts/:scriptName/schedules",
-				() => {
+				({ params }) => {
 					schedulesCalled = true;
+					schedulesAccount = params.accountId;
 					return HttpResponse.json(createFetchResult({ schedules: [] }));
 				}
 			)
 		);
+		vi.stubEnv("CLOUDFLARE_ACCOUNT_ID", "env-account");
 		await seed({
+			"cloudflare.config.ts": `export default () => { throw new Error("Project config should not be reevaluated"); };`,
 			".cloudflare/output/v0/config.json": buildOutputRootConfig({
+				complianceRegion: "fedramp-high",
 				buildContext: { isPreview: false, mode: "staging" },
 			}),
 			".cloudflare/output/v0/workers/default/worker.config.json": workerConfig({
@@ -166,14 +178,15 @@ describe("cf workers triggers deploy", () => {
 				"export default { fetch() { return new Response('ok'); } }",
 		});
 
-		await expect(
-			runCf([...TRIGGERS_DEPLOY_COMMAND, "--prebuilt"])
-		).rejects.toThrow(
-			'The Build Output was created with mode "staging", but this command did not specify a mode. Rerun with "--mode staging".'
-		);
+		const { exitCode } = await runCf([
+			...TRIGGERS_DEPLOY_COMMAND,
+			"--prebuilt",
+		]);
 
+		expect(exitCode).toBe(0);
 		expect(buildDelegateWasCalled()).toBe(false);
-		expect(schedulesCalled).toBe(false);
+		expect(schedulesCalled).toBe(true);
+		expect(schedulesAccount).toBe("env-account");
 	});
 
 	it("deploys the triggers of the Worker selected by --worker", async () => {

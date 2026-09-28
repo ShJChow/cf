@@ -588,9 +588,14 @@ describe("cf deploy", () => {
 		});
 
 		it("skips build when --prebuilt is passed", async () => {
+			const requests = recordRequests();
 			mockWorkerUpload();
 			await seed({
-				".cloudflare/output/v0/config.json": buildOutputRootConfig(),
+				"cloudflare.config.ts": `export default () => { throw new Error("Project config should not be reevaluated"); };`,
+				".cloudflare/output/v0/config.json": buildOutputRootConfig({
+					accountId: "built-account",
+					complianceRegion: "fedramp-high",
+				}),
 				".cloudflare/output/v0/workers/default/worker.config.json":
 					workerConfig(),
 				".cloudflare/output/v0/workers/default/bundle/index.js":
@@ -601,11 +606,19 @@ describe("cf deploy", () => {
 
 			expect(exitCode).toBe(0);
 			expect(buildDelegateWasCalled()).toBe(false);
+			expect(
+				requests.some((request) => request.includes("/accounts/built-account/"))
+			).toBe(true);
 		});
 
-		it("requires the recorded mode when deploying prebuilt output", async () => {
+		it("selects an account without rereading config when output omits it", async () => {
+			vi.stubEnv("CLOUDFLARE_ACCOUNT_ID", "env-account");
+			const requests = recordRequests();
+			const upload = mockWorkerUpload();
 			await seed({
+				"cloudflare.config.ts": `export default () => { throw new Error("Project config should not be reevaluated"); };`,
 				".cloudflare/output/v0/config.json": buildOutputRootConfig({
+					complianceRegion: "fedramp-high",
 					buildContext: { isPreview: false, mode: "staging" },
 				}),
 				".cloudflare/output/v0/workers/default/worker.config.json":
@@ -614,10 +627,14 @@ describe("cf deploy", () => {
 					"export default { fetch() { return new Response('ok'); } }",
 			});
 
-			await expect(runCf(["deploy", "--prebuilt"])).rejects.toThrow(
-				'The Build Output was created with mode "staging", but this command did not specify a mode. Rerun with "--mode staging".'
-			);
+			const { exitCode } = await runCf(["deploy", "--prebuilt"]);
+
+			expect(exitCode).toBe(0);
 			expect(buildDelegateWasCalled()).toBe(false);
+			expect(upload.metadata?.main_module).toBe("index.js");
+			expect(
+				requests.some((request) => request.includes("/accounts/env-account/"))
+			).toBe(true);
 		});
 
 		it("rejects Preview Build Output", async () => {

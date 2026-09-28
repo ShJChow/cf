@@ -49,11 +49,15 @@ function resolveValue(
 }
 
 async function resolveAccountId(
-	options: { isPreview?: boolean } = {}
+	options: { isPreview?: boolean; skipProjectSettings?: boolean } = {}
 ): Promise<ContextSource | undefined> {
 	const envValue = process.env.CLOUDFLARE_ACCOUNT_ID;
 	if (envValue) {
 		return { value: envValue, source: "env" };
+	}
+	if (options.skipProjectSettings) {
+		// Build Output consumers already have evaluated settings.
+		return undefined;
 	}
 
 	const preloadedProjectSettings = getLoadedProjectSettings(undefined, options);
@@ -102,6 +106,8 @@ export async function resolveAccountIdSilent(): Promise<string | undefined> {
  */
 export async function getAccountId(options?: {
 	isPreview?: boolean;
+	skipProjectSettings?: boolean;
+	complianceRegion?: ComplianceRegion;
 }): Promise<string> {
 	const result = await resolveAccountId(options);
 

@@ -297,7 +297,7 @@ describe("cf workers check", () => {
 		expect(profile.endTime).toEqual(expect.any(Number));
 	});
 
-	it("requires the recorded mode when checking prebuilt output", async () => {
+	it("checks prebuilt output with a recorded mode without --mode", async () => {
 		await seed({
 			".cloudflare/output/v0/config.json": buildOutputRootConfig({
 				buildContext: { isPreview: false, mode: "staging" },
@@ -308,10 +308,11 @@ describe("cf workers check", () => {
 				"export default { fetch() { return new Response('ok'); } };",
 		});
 
-		await expect(runCf(["workers", "check", "--prebuilt"])).rejects.toThrow(
-			'The Build Output was created with mode "staging", but this command did not specify a mode. Rerun with "--mode staging".'
-		);
-		expect(startupProfile.analyseBundle).not.toHaveBeenCalled();
+		const { exitCode } = await runCf(["workers", "check", "--prebuilt"]);
+
+		expect(exitCode).toBe(0);
+		expect(buildDelegateWasCalled()).toBe(false);
+		expect(startupProfile.analyseBundle).toHaveBeenCalledOnce();
 	});
 
 	it("profiles the Worker selected by --worker", async () => {

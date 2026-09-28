@@ -69,6 +69,25 @@ describe("context", () => {
 				compliance_region: "public",
 			});
 		});
+
+		it("uses an explicit region without reading project settings", async () => {
+			writeFileSync(
+				join(process.cwd(), "cloudflare.config.ts"),
+				`export default () => { throw new Error("Project config should not be reevaluated"); };`
+			);
+			getOrSelectAccountIdMock.mockResolvedValue("selected-account");
+
+			await expect(
+				getAccountId({
+					skipProjectSettings: true,
+					complianceRegion: "fedramp_high",
+				})
+			).resolves.toBe("selected-account");
+			expect(getOrSelectAccountIdMock).toHaveBeenCalledWith({
+				account_id: undefined,
+				compliance_region: "fedramp_high",
+			});
+		});
 	});
 
 	describe("resolveAccountIdSilent", () => {

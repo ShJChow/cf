@@ -50,20 +50,4 @@ describe("cf previews deploy validation", () => {
 			} as Parameters<typeof runPreviewDeploy>[0])
 		).rejects.toThrow(expected);
 	});
-
-	it("requires the recorded mode when deploying prebuilt output", async () => {
-		mocks.readBuildOutput.mockResolvedValue({
-			rootConfig: { buildContext: { isPreview: true, mode: "staging" } },
-			workers: { default: {} },
-		});
-
-		await expect(
-			runPreviewDeploy({
-				"preview-name": "feature",
-				prebuilt: true,
-			} as Parameters<typeof runPreviewDeploy>[0])
-		).rejects.toThrow(
-			'The Build Output was created with mode "staging", but this command did not specify a mode. Rerun with "--mode staging".'
-		);
-	});
 });

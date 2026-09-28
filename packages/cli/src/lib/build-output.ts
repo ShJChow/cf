@@ -22,15 +22,9 @@ export interface ParsedWorkerConfig {
 
 export function validateBuildOutputMode(
 	requestedMode: string | undefined,
-	builtMode: string | undefined,
-	options: { requireRequestedMode?: boolean } = {}
+	builtMode: string | undefined
 ): void {
 	if (requestedMode === undefined) {
-		if (options.requireRequestedMode && builtMode !== undefined) {
-			throw new BuildOutputConfigError(
-				`The Build Output was created with mode "${builtMode}", but this command did not specify a mode. Rerun with "--mode ${builtMode}".`
-			);
-		}
 		return;
 	}
 

@@ -15,7 +15,7 @@ import {
 } from "@cloudflare/workers-auth/cf";
 import { USER_AGENT, VERSION } from "../../version.js";
 import { CliExit } from "../cli-exit.js";
-import { getComplianceRegion } from "../context.js";
+import { getComplianceRegion, type ComplianceRegion } from "../context.js";
 import { isNonInteractiveOrCI } from "../interactive.js";
 import { openSession } from "../session.js";
 
@@ -90,11 +90,12 @@ const auth = createCfAuth({
 /** Resolve a configured, cached, or newly selected account ID. */
 export async function getOrSelectAccountId(
 	accountId?: string,
-	options?: { isPreview?: boolean }
+	options?: { isPreview?: boolean; complianceRegion?: ComplianceRegion }
 ): Promise<string> {
 	return auth.getOrSelectAccountId({
 		account_id: accountId,
-		compliance_region: await getComplianceRegion(options),
+		compliance_region:
+			options?.complianceRegion ?? (await getComplianceRegion(options)),
 	});
 }
 

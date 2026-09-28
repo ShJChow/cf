@@ -12,6 +12,7 @@ import {
 } from "@cloudflare/deploy-helpers";
 import {
 	getCloudflareApiBaseUrl,
+	getCloudflareComplianceRegion,
 	getDockerPath,
 } from "@cloudflare/workers-utils";
 import { getAccountId, getAuthToken } from "../../lib/auth.js";
@@ -118,9 +119,7 @@ async function uploadBuildOutput(argv: UploadArgs, ctx: UploadCommand) {
 			`This build output is for a Preview. Run ${previewCommand} instead.`
 		);
 	}
-	validateBuildOutputMode(argv.mode, rootConfig.buildContext.mode, {
-		requireRequestedMode: argv.prebuilt,
-	});
+	validateBuildOutputMode(argv.mode, rootConfig.buildContext.mode);
 	const worker = selectBuildOutputWorker(workers, argv.worker);
 	const { wranglerConfig, builtConfig } = parseWorkerConfig(worker, rootConfig);
 	const buildResult = assembleBuildResult(worker, builtConfig);
@@ -129,7 +128,13 @@ async function uploadBuildOutput(argv: UploadArgs, ctx: UploadCommand) {
 	// skips its account-scoped checks (such as the latest-deployment lookup)
 	// only when no account is supplied, so leave it unresolved.
 	const authToken = argv["dry-run"] ? "" : await getAuthToken();
-	const accountId = argv["dry-run"] ? undefined : await getAccountId();
+	const accountId = argv["dry-run"]
+		? undefined
+		: (rootConfig.accountId ??
+			(await getAccountId({
+				skipProjectSettings: true,
+				complianceRegion: getCloudflareComplianceRegion(wranglerConfig),
+			})));
 
 	// Initialize the deploy-helpers context.
 	const deployContext = createDeployContext(authToken);

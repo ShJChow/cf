@@ -60,9 +60,7 @@ const command: CommandModule<CommonYargsOptions, CheckArgs> = {
 		}
 
 		const { workers, rootConfig } = await readBuildOutput(process.cwd());
-		validateBuildOutputMode(argv.mode, rootConfig.buildContext.mode, {
-			requireRequestedMode: argv.prebuilt,
-		});
+		validateBuildOutputMode(argv.mode, rootConfig.buildContext.mode);
 		const worker = selectBuildOutputWorker(workers, argv.worker);
 		const { wranglerConfig, builtConfig } = parseWorkerConfig(
 			worker,
